@@ -1,26 +1,70 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useForm } from '@mantine/form';
-import { TextInput, PasswordInput, Button, Title, Text, Select, LoadingOverlay } from '@mantine/core';
+import {
+    TextInput,
+    PasswordInput,
+    Button,
+    Text,
+    Select,
+    LoadingOverlay,
+    Popover,
+    Progress,
+    Stack,
+    Group
+} from '@mantine/core';
+import { IconX, IconCheck } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import { z } from 'zod';
 import axios from '../../api/axios';
+
+function PasswordRequirement({ meets, label }: { meets: boolean; label: string }) {
+    return (
+      <Text c={meets ? 'teal' : 'red'} mt={5} size="sm">
+        <Group gap="xs">
+            {meets ? <IconCheck size={14} stroke={1.5} /> : <IconX size={14} stroke={1.5} />}
+            <span>{label}</span>
+        </Group>
+      </Text>
+    );
+}
+
+const requirements = [
+    { re: /[0-9]/, label: 'Includes number' },
+    { re: /[a-z]/, label: 'Includes lowercase letter' },
+    { re: /[A-Z]/, label: 'Includes uppercase letter' },
+    { re: /[$&+,:;=?@#|'<>.^*()%!-]/, label: 'Includes special symbol' },
+];
+
+function getStrength(password: string) {
+    let multiplier = password.length > 7 ? 0 : 1;
+    requirements.forEach((requirement) => {
+        if (!requirement.re.test(password)) {
+            multiplier += 1;
+        }
+    });
+    return Math.max(100 - (100 / (requirements.length + 1)) * multiplier, 0);
+}
 
 const schema = z.object({
     role: z.enum(['Student', 'Teacher']),
     fullName: z.string().min(3, { message: 'Full name must be at least 3 characters' }),
     identifier: z.string().min(1, { message: 'This field is required' }),
-    password: z.string().min(6, { message: 'Password must be at least 6 characters' }),
+    password: z.string()
+        .min(8, { message: 'Password must be at least 8 characters' })
+        .refine((val) => requirements.every(req => req.re.test(val)), {
+            message: 'Password does not meet all requirements'
+        }),
     confirmPassword: z.string(),
 }).refine((data) => data.password === data.confirmPassword, {
     message: "Passwords don't match",
     path: ['confirmPassword'],
 });
 
-
 const Signup = () => {
     const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
+    const [popoverOpened, setPopoverOpened] = useState(false);
 
     const form = useForm({
         initialValues: {
@@ -31,6 +75,11 @@ const Signup = () => {
             confirmPassword: '',
         },
     });
+    
+    const strength = getStrength(form.values.password);
+    const checks = requirements.map((requirement, index) => (
+        <PasswordRequirement key={index} label={requirement.label} meets={requirement.re.test(form.values.password)} />
+    ));
 
     const handleSubmit = async () => {
         const result = schema.safeParse(form.values);
@@ -69,29 +118,50 @@ const Signup = () => {
     const identifierPlaceholder = role === 'Student' ? 'Enter your index number' : 'your@email.com';
 
     return (
-        <>
-            <LoadingOverlay visible={loading} />
-            <Title ta="center">Create Account</Title>
-             <Text c="dimmed" size="sm" ta="center" mt={5}>
+        <Stack mt="xl" pos="relative">
+            <LoadingOverlay visible={loading} zIndex={1000} overlayProps={{ radius: "sm", blur: 2 }} />
+            <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }}>
+                <Stack gap="md">
+                    <Select
+                        label="I want to register as a"
+                        placeholder="Select your role"
+                        data={['Student', 'Teacher']}
+                        required
+                        {...form.getInputProps('role')}
+                    />
+                    <TextInput label="Full Name" placeholder="John Doe" required {...form.getInputProps('fullName')} />
+                    <TextInput label={identifierLabel} placeholder={identifierPlaceholder} required {...form.getInputProps('identifier')} />
+                    
+                    <Popover opened={popoverOpened} position="bottom" width="target" transitionProps={{ transition: 'pop' }}>
+                        <Popover.Target>
+                            <div onFocusCapture={() => setPopoverOpened(true)} onBlurCapture={() => setPopoverOpened(false)}>
+                                <PasswordInput
+                                    label="Password"
+                                    placeholder="Your password"
+                                    required
+                                    {...form.getInputProps('password')}
+                                />
+                            </div>
+                        </Popover.Target>
+                        <Popover.Dropdown>
+                            <Progress color={strength === 100 ? 'teal' : 'red'} value={strength} size={5} mb="xs" />
+                            <PasswordRequirement label="Includes at least 8 characters" meets={form.values.password.length > 7} />
+                            {checks}
+                        </Popover.Dropdown>
+                    </Popover>
+
+                    <PasswordInput label="Confirm Password" placeholder="Confirm password" required {...form.getInputProps('confirmPassword')} />
+                    <Button type="submit" fullWidth mt="md">
+                        Create Account
+                    </Button>
+                </Stack>
+            </form>
+            <Text c="dimmed" size="sm" ta="center" mt="md">
                 Already have an account?{' '}
                 <Link to="/login">Sign in</Link>
             </Text>
-            <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }}>
-                <Select
-                    label="I want to register as a"
-                    placeholder="Select your role"
-                    data={['Student', 'Teacher']}
-                    required
-                    mt="md"
-                    {...form.getInputProps('role')}
-                />
-                 <TextInput label="Full Name" placeholder="John Doe" required mt="md" {...form.getInputProps('fullName')} />
-                 <TextInput label={identifierLabel} placeholder={identifierPlaceholder} required mt="md" {...form.getInputProps('identifier')} />
-                 <PasswordInput label="Password" placeholder="Your password" required mt="md" {...form.getInputProps('password')} />
-                 <PasswordInput label="Confirm Password" placeholder="Confirm password" required mt="md" {...form.getInputProps('confirmPassword')} />
-                 <Button type="submit" fullWidth mt="xl">Sign up</Button>
-            </form>
-        </>
+        </Stack>
     );
 };
+
 export default Signup;

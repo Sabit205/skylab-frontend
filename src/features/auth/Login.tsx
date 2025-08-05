@@ -1,16 +1,28 @@
 import { useState } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useForm } from '@mantine/form';
-import { TextInput, PasswordInput, Button, Title, Text, Select, LoadingOverlay } from '@mantine/core';
+import {
+    TextInput,
+    PasswordInput,
+    Button,
+    Text,
+    Select,
+    LoadingOverlay,
+    Stack,
+    Anchor,
+    Group,
+    Checkbox
+} from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { z } from 'zod';
 import useAxiosPrivate from '../../hooks/useAxiosPrivate';
 import useAuth from '../../hooks/useAuth';
 
+// Zod schema for login form validation
 const schema = z.object({
   role: z.enum(['Student', 'Teacher', 'Admin']),
   identifier: z.string().min(1, { message: 'This field is required' }),
-  password: z.string().min(6, { message: 'Password should have at least 6 characters' }),
+  password: z.string().min(1, { message: 'Password is required' }),
 });
 
 const Login = () => {
@@ -21,6 +33,7 @@ const Login = () => {
     const [loading, setLoading] = useState(false);
     const axiosPrivate = useAxiosPrivate();
 
+    // Using manual validation for robustness
     const form = useForm({
         initialValues: {
             role: 'Student' as 'Student' | 'Teacher' | 'Admin',
@@ -65,41 +78,46 @@ const Login = () => {
     const identifierPlaceholder = role === 'Student' ? 'e.g., S12345' : 'your@email.com';
 
     return (
-        <>
-            <LoadingOverlay visible={loading} />
-            <Title ta="center">Welcome back!</Title>
-            <Text c="dimmed" size="sm" ta="center" mt={5}>
-                Do not have an account yet?{' '}
+        <Stack mt="xl" pos="relative">
+            <LoadingOverlay visible={loading} zIndex={1000} overlayProps={{ radius: "sm", blur: 2 }} />
+            <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }}>
+                <Stack gap="md">
+                    <Select
+                        label="I am a"
+                        placeholder="Select your role"
+                        data={['Student', 'Teacher', 'Admin']}
+                        required
+                        {...form.getInputProps('role')}
+                    />
+                    <TextInput
+                        label={identifierLabel}
+                        placeholder={identifierPlaceholder}
+                        required
+                        {...form.getInputProps('identifier')}
+                    />
+                    <PasswordInput
+                        label="Password"
+                        placeholder="Your password"
+                        required
+                        {...form.getInputProps('password')}
+                    />
+                    <Group justify="space-between" mt="sm">
+                        <Checkbox label="Remember me" />
+                        <Anchor component="button" size="sm">
+                            Forgot password?
+                        </Anchor>
+                    </Group>
+                    <Button type="submit" fullWidth mt="md">
+                        Sign in
+                    </Button>
+                </Stack>
+            </form>
+             <Text c="dimmed" size="sm" ta="center" mt="md">
+                Don't have an account yet?{' '}
                 <Link to="/signup">Create account</Link>
             </Text>
-            <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }}>
-                <Select
-                    label="I am a"
-                    placeholder="Select your role"
-                    data={['Student', 'Teacher', 'Admin']}
-                    required
-                    mt="md"
-                    {...form.getInputProps('role')}
-                />
-                <TextInput
-                    label={identifierLabel}
-                    placeholder={identifierPlaceholder}
-                    required
-                    mt="md"
-                    {...form.getInputProps('identifier')}
-                />
-                <PasswordInput
-                    label="Password"
-                    placeholder="Your password"
-                    required
-                    mt="md"
-                    {...form.getInputProps('password')}
-                />
-                <Button type="submit" fullWidth mt="xl">
-                    Sign in
-                </Button>
-            </form>
-        </>
+        </Stack>
     );
 };
+
 export default Login;
