@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const BASE_URL = 'http://localhost:3500';
+const BASE_URL = 'https://skylab-backend-309zxem12-sabit205s-projects.vercel.app';
 
 // Default export for public routes
 export default axios.create({
