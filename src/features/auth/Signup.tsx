@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useForm } from '@mantine/form';
 import {
@@ -18,9 +18,11 @@ import { notifications } from '@mantine/notifications';
 import { z } from 'zod';
 import axios from '../../api/axios';
 
+// A small component to render each password requirement
 function PasswordRequirement({ meets, label }: { meets: boolean; label: string }) {
     return (
-      <Text c={meets ? 'teal' : 'red'} mt={5} size="sm">
+      // FIX: The outer <Text> component now renders as a <div> to prevent nesting errors.
+      <Text component="div" c={meets ? 'teal' : 'red'} mt={5} size="sm">
         <Group gap="xs">
             {meets ? <IconCheck size={14} stroke={1.5} /> : <IconX size={14} stroke={1.5} />}
             <span>{label}</span>
@@ -46,10 +48,13 @@ function getStrength(password: string) {
     return Math.max(100 - (100 / (requirements.length + 1)) * multiplier, 0);
 }
 
+// Zod schema for form validation
 const schema = z.object({
     role: z.enum(['Student', 'Teacher']),
     fullName: z.string().min(3, { message: 'Full name must be at least 3 characters' }),
     identifier: z.string().min(1, { message: 'This field is required' }),
+    // FIX: Changed `classId` to `class` to match the rest of the application's data structure.
+    class: z.string().optional(),
     password: z.string()
         .min(8, { message: 'Password must be at least 8 characters' })
         .refine((val) => requirements.every(req => req.re.test(val)), {
@@ -59,23 +64,45 @@ const schema = z.object({
 }).refine((data) => data.password === data.confirmPassword, {
     message: "Passwords don't match",
     path: ['confirmPassword'],
+}).refine((data) => data.role !== 'Student' || !!data.class, {
+    message: 'Please select a class.',
+    path: ['class'],
 });
 
 const Signup = () => {
     const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
     const [popoverOpened, setPopoverOpened] = useState(false);
+    const [classes, setClasses] = useState<{ value: string; label: string }[]>([]);
 
     const form = useForm({
         initialValues: {
             role: 'Student' as 'Student' | 'Teacher',
             fullName: '',
             identifier: '',
+            class: '', // Use 'class' to match the schema
             password: '',
             confirmPassword: '',
         },
     });
     
+    useEffect(() => {
+        const fetchClasses = async () => {
+            try {
+                const response = await axios.get('/classes');
+                setClasses(response.data.map((c: any) => ({ value: c._id, label: c.name })));
+            } catch (error) {
+                console.error("Failed to fetch classes for signup form", error);
+                notifications.show({
+                    color: 'red',
+                    title: 'Error',
+                    message: 'Could not load class list. Please try again later.'
+                });
+            }
+        };
+        fetchClasses();
+    }, []);
+
     const strength = getStrength(form.values.password);
     const checks = requirements.map((requirement, index) => (
         <PasswordRequirement key={index} label={requirement.label} meets={requirement.re.test(form.values.password)} />
@@ -89,13 +116,16 @@ const Signup = () => {
         }
 
         setLoading(true);
-        const { fullName, password, role, identifier } = result.data;
-        const payload = {
-            fullName,
-            password,
-            role,
-            ...(role === 'Student' ? { indexNumber: identifier } : { email: identifier })
-        };
+        const { fullName, password, role, identifier, class: classId } = result.data;
+        
+        const payload: any = { fullName, password, role };
+        
+        if (role === 'Student') {
+            payload.indexNumber = identifier;
+            payload.class = classId;
+        } else {
+            payload.email = identifier;
+        }
         
         try {
             const response = await axios.post('/auth/signup', payload);
@@ -131,6 +161,17 @@ const Signup = () => {
                     />
                     <TextInput label="Full Name" placeholder="John Doe" required {...form.getInputProps('fullName')} />
                     <TextInput label={identifierLabel} placeholder={identifierPlaceholder} required {...form.getInputProps('identifier')} />
+                    
+                    {role === 'Student' && (
+                        <Select
+                            label="Select your Class"
+                            placeholder="Pick your class"
+                            data={classes}
+                            required
+                            searchable
+                            {...form.getInputProps('class')}
+                        />
+                    )}
                     
                     <Popover opened={popoverOpened} position="bottom" width="target" transitionProps={{ transition: 'pop' }}>
                         <Popover.Target>

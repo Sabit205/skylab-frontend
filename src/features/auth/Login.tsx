@@ -15,10 +15,9 @@ import {
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { z } from 'zod';
-import useAxiosPrivate from '../../hooks/useAxiosPrivate';
+import { axiosPrivate } from '../../api/axios'; // --- THE CRITICAL FIX: Use axiosPrivate ---
 import useAuth from '../../hooks/useAuth';
 
-// Zod schema for login form validation
 const schema = z.object({
   role: z.enum(['Student', 'Teacher', 'Admin']),
   identifier: z.string().min(1, { message: 'This field is required' }),
@@ -31,9 +30,7 @@ const Login = () => {
     const location = useLocation();
     const from = location.state?.from?.pathname || '/';
     const [loading, setLoading] = useState(false);
-    const axiosPrivate = useAxiosPrivate();
 
-    // Using manual validation for robustness
     const form = useForm({
         initialValues: {
             role: 'Student' as 'Student' | 'Teacher' | 'Admin',
@@ -51,13 +48,14 @@ const Login = () => {
 
         setLoading(true);
         try {
-            const response = await axiosPrivate.post('/auth/login', result.data, {
-                headers: { 'Content-Type': 'application/json' },
-                withCredentials: true,
-            });
-            const { accessToken, user } = response.data;
-            setAuth({ user, accessToken });
+            // We now use axiosPrivate for the login call. This ensures `withCredentials: true` is set,
+            // which is essential for the backend to set the httpOnly cookie correctly in the browser.
+            const response = await axiosPrivate.post('/auth/login', result.data);
             
+            const { accessToken, user } = response.data;
+            setAuth({ user, accessToken }); // Set the global auth state
+            
+            // Redirect based on role
             let redirectPath = '/';
             if (user.role === 'Admin') redirectPath = '/admin';
             else if (user.role === 'Teacher') redirectPath = '/teacher';
