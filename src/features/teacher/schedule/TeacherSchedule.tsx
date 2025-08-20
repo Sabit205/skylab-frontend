@@ -1,43 +1,52 @@
 import { useState, useEffect } from 'react';
-import { Title, Paper, Table, Text, Center, Loader } from '@mantine/core';
+import { Title, Paper, Table, Text, Center, Loader, Group } from '@mantine/core';
+import { DatePickerInput } from '@mantine/dates';
 import useAxiosPrivate from '../../../hooks/useAxiosPrivate';
 import { notifications } from '@mantine/notifications';
+import { getWeekDates, getStartOfWeek } from '../../../utils/dateUtils';
+import { formatTime } from '../../../utils/timeUtils';
 
-// UPDATED: The `days` array is changed here as well for the UI
 const days = ['saturday', 'sunday', 'monday', 'tuesday', 'wednesday', 'thursday'];
 const periods = Array(8).fill(0).map((_, i) => i + 1);
 
 const TeacherSchedule = () => {
     const [scheduleData, setScheduleData] = useState<any>({});
     const [loading, setLoading] = useState(true);
+    const [week, setWeek] = useState<Date>(getStartOfWeek(new Date()));
     const axiosPrivate = useAxiosPrivate();
 
-    useEffect(() => {
-        const fetchAndFormatSchedule = async () => {
-            setLoading(true);
-            try {
-                const response = await axiosPrivate.get('/api/teacher/my-schedule');
-                const flatSchedule = response.data;
+    const weekDates = getWeekDates(week);
 
+    useEffect(() => {
+        setLoading(true);
+        const fetchAndFormatSchedule = async () => {
+            try {
+                const response = await axiosPrivate.get('/api/teacher/my-schedule', {
+                    params: { weekStartDate: week.toISOString() }
+                });
+                
+                const scheduleObject = response.data.schedule || {};
                 const formattedSchedule: any = {};
-                for (const item of flatSchedule) {
-                    if (!formattedSchedule[item.day]) {
-                        formattedSchedule[item.day] = {};
+                
+                days.forEach(day => {
+                    formattedSchedule[day] = {};
+                    if(scheduleObject[day]) {
+                        scheduleObject[day].forEach((period: any) => {
+                            formattedSchedule[day][period.period] = period;
+                        });
                     }
-                    formattedSchedule[item.day][item.period] = {
-                        subject: item.subject,
-                        className: item.className
-                    };
-                }
+                });
+
                 setScheduleData(formattedSchedule);
             } catch (error) {
-                notifications.show({ color: 'red', title: 'Error', message: 'Failed to load schedule.' });
+                notifications.show({ color: 'red', title: 'Error', message: 'Failed to load schedule for the selected week.' });
+                setScheduleData({});
             } finally {
                 setLoading(false);
             }
         };
         fetchAndFormatSchedule();
-    }, [axiosPrivate]);
+    }, [axiosPrivate, week]);
 
     if (loading) {
         return <Center p="xl"><Loader /></Center>;
@@ -45,7 +54,17 @@ const TeacherSchedule = () => {
 
     return (
         <>
-            <Title order={2} mb="lg">My Weekly Schedule</Title>
+            <Group justify="space-between" mb="lg">
+                <Title order={2}>My Weekly Schedule</Title>
+                <DatePickerInput
+                    label="Select Week"
+                    placeholder="Pick a date"
+                    value={week}
+                    onChange={(date) => date && setWeek(getStartOfWeek(date))}
+                    valueFormat="MMM D, YYYY"
+                    style={{ minWidth: 200 }}
+                />
+            </Group>
             <Paper withBorder p="md" radius="md" style={{ overflow: 'auto' }}>
                  <Table withTableBorder withColumnBorders miw={1000} highlightOnHover>
                     <Table.Thead>
@@ -55,18 +74,21 @@ const TeacherSchedule = () => {
                         </Table.Tr>
                     </Table.Thead>
                     <Table.Tbody>
-                        {/* The table rows are generated from the new `days` array */}
                         {days.map(day => (
                             <Table.Tr key={day}>
-                                <Table.Td tt="capitalize" fw={500}>{day}</Table.Td>
+                                <Table.Td>
+                                    <Text tt="capitalize" fw={500}>{day}</Text>
+                                    <Text size="xs" c="dimmed">{weekDates[day]}</Text>
+                                </Table.Td>
                                 {periods.map(p => {
                                     const periodData = scheduleData[day]?.[p];
                                     return (
                                         <Table.Td key={`${day}-${p}`} ta="center">
                                             {periodData ? (
                                                 <>
-                                                    <Text fw={500}>{periodData.subject || 'N/A'}</Text>
+                                                    <Text fw={500}>{periodData.subject?.name || 'N/A'}</Text>
                                                     <Text size="xs" c="dimmed">{periodData.className}</Text>
+                                                    <Text size="xs" c="dimmed">{formatTime(periodData.startTime)} - {formatTime(periodData.endTime)}</Text>
                                                 </>
                                             ) : '-'}
                                         </Table.Td>
@@ -80,5 +102,4 @@ const TeacherSchedule = () => {
         </>
     );
 };
-
 export default TeacherSchedule;

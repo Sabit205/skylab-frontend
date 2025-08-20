@@ -1,21 +1,26 @@
 import { useState, useEffect } from 'react';
-import { Title, Paper, Table, Select } from '@mantine/core';
+import { Title, Paper, Table, Select, Text } from '@mantine/core';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import useAxiosPrivate from '../../../hooks/useAxiosPrivate';
 
-const StudentResults = () => {
+interface StudentResultsProps {
+    isGuardian?: boolean;
+}
+
+const StudentResults = ({ isGuardian = false }: StudentResultsProps) => {
     const [results, setResults] = useState<any[]>([]);
     const [selectedExam, setSelectedExam] = useState<string | null>(null);
     const axiosPrivate = useAxiosPrivate();
 
     useEffect(() => {
-        axiosPrivate.get('/api/student/my-results').then(res => {
+        const endpoint = isGuardian ? '/api/guardian/my-results' : '/api/student/my-results';
+        axiosPrivate.get(endpoint).then(res => {
             setResults(res.data);
             if (res.data.length > 0) {
                 setSelectedExam(res.data[0]._id);
             }
         });
-    }, [axiosPrivate]);
+    }, [axiosPrivate, isGuardian]);
     
     const examOptions = results.map(r => ({ value: r._id, label: r.examType }));
     const selectedResult = results.find(r => r._id === selectedExam);
@@ -31,8 +36,10 @@ const StudentResults = () => {
 
     return (
         <>
-            <Title order={2} mb="lg">My Academic Results</Title>
-            <Select label="Select Exam" data={examOptions} value={selectedExam} onChange={setSelectedExam} mb="xl" />
+            <Title order={2} mb="lg">Academic Results</Title>
+            <Select label="Select Exam" data={examOptions} value={selectedExam} onChange={setSelectedExam} mb="xl" placeholder="Select an exam to view results" />
+            
+            {!selectedResult && <Text c="dimmed" ta="center" p="xl">No results found for the selected exam.</Text>}
             
             {selectedResult && (
                 <Paper withBorder p="md" radius="md">
@@ -46,7 +53,7 @@ const StudentResults = () => {
                  <Paper withBorder p="md" radius="md" mt="xl">
                     <Title order={4} mb="md">Performance Overview</Title>
                     <ResponsiveContainer width="100%" height={300}>
-                        <BarChart data={selectedResult.results}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="subjectName" /><YAxis /><Tooltip /><Bar dataKey="marks" fill="#8884d8" /></BarChart>
+                        <BarChart data={selectedResult.results}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="subjectName" /><YAxis domain={[0, 100]} /><Tooltip /><Bar dataKey="marks" fill="#8884d8" /></BarChart>
                     </ResponsiveContainer>
                 </Paper>
             )}

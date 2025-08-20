@@ -3,42 +3,34 @@ import useAuth from '../hooks/useAuth';
 import { Loader, Center } from '@mantine/core';
 
 interface ProtectedRouteProps {
-    allowedRoles: string[];
+    allowedRoles?: string[];
 }
 
 const ProtectedRoute = ({ allowedRoles }: ProtectedRouteProps) => {
-    // Get the auth state AND the new isLoading state from our context
     const { auth, isLoading } = useAuth();
     const location = useLocation();
 
-    // --- NEW LOGIC ---
-    // 1. Check if the session is currently being restored.
     if (isLoading) {
-        // If it is, we display a full-screen loader and WAIT.
-        // We do NOT redirect. This prevents the race condition.
-        return (
-            <Center style={{ height: '100vh' }}>
-                <Loader />
-            </Center>
-        );
+        return <Center style={{ height: '100vh' }}><Loader /></Center>;
     }
 
-    // 2. After loading is complete, we check for authorization.
-    const isAuthorized = auth?.user?.role && allowedRoles.includes(auth.user.role);
-
-    if (isAuthorized) {
-        // If authorized, render the requested child component (e.g., AdminDashboard)
-        return <Outlet />;
+    const isGuardianRoute = location.pathname.startsWith('/guardian');
+    
+    // Guardian Access Logic
+    if (isGuardianRoute) {
+        const isGuardianAuthenticated = auth?.user?.studentId && auth?.accessToken;
+        return isGuardianAuthenticated ? <Outlet /> : <Navigate to="/login" state={{ from: location }} replace />;
     }
 
-    if (auth?.accessToken) {
-        // If the user is logged in but doesn't have the right role, send them to the unauthorized page.
-        // This can happen if a teacher tries to access /admin.
-        return <Navigate to="/unauthorized" state={{ from: location }} replace />;
+    // Regular User Access Logic
+    if (allowedRoles) {
+        const isAuthorized = auth?.user?.role && allowedRoles.includes(auth.user.role);
+        if (isAuthorized) return <Outlet />;
+        if (auth?.accessToken) return <Navigate to="/unauthorized" state={{ from: location }} replace />;
+        return <Navigate to="/login" state={{ from: location }} replace />;
     }
 
-    // 3. If loading is complete and there's still no access token, the user is not logged in.
-    // Redirect them to the login page.
+    // Fallback if no roles are provided for a non-guardian route
     return <Navigate to="/login" state={{ from: location }} replace />;
 };
 

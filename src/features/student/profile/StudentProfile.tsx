@@ -3,17 +3,22 @@ import { Title, Paper, Avatar, Text, Group, TextInput, Button } from '@mantine/c
 import useAxiosPrivate from '../../../hooks/useAxiosPrivate';
 import { notifications } from '@mantine/notifications';
 
-const StudentProfile = () => {
+interface StudentProfileProps {
+    isGuardian?: boolean;
+}
+
+const StudentProfile = ({ isGuardian = false }: StudentProfileProps) => {
     const [profile, setProfile] = useState<any>(null);
     const [phone, setPhone] = useState('');
     const axiosPrivate = useAxiosPrivate();
 
     useEffect(() => {
-        axiosPrivate.get('/api/student/my-profile').then(res => {
+        const endpoint = isGuardian ? '/api/guardian/my-profile' : '/api/student/my-profile';
+        axiosPrivate.get(endpoint).then(res => {
             setProfile(res.data);
             setPhone(res.data.phone || '');
         });
-    }, [axiosPrivate]);
+    }, [axiosPrivate, isGuardian]);
 
     const handleUpdate = () => {
         axiosPrivate.put('/api/student/my-profile', { phone })
@@ -28,7 +33,7 @@ const StudentProfile = () => {
 
     return (
         <>
-            <Title order={2} mb="lg">My Profile</Title>
+            <Title order={2} mb="lg">{isGuardian ? `${profile.fullName}'s Profile` : 'My Profile'}</Title>
             <Paper withBorder p="xl" radius="md">
                 <Group>
                     <Avatar size="xl" radius="xl" />
@@ -37,14 +42,10 @@ const StudentProfile = () => {
                         <Text c="dimmed">Role: {profile.role}</Text>
                     </div>
                 </Group>
-                <Group mt="xl">
-                    <Text fw={500}>Index Number:</Text><Text>{profile.indexNumber}</Text>
-                </Group>
-                <Group>
-                    <Text fw={500}>Class:</Text><Text>{profile.class?.name || 'N/A'}</Text>
-                </Group>
-                <TextInput label="Phone Number" value={phone} onChange={(e) => setPhone(e.currentTarget.value)} mt="md" />
-                <Button onClick={handleUpdate} mt="xl">Update Profile</Button>
+                <Group mt="xl"><Text fw={500}>Index Number:</Text><Text>{profile.indexNumber}</Text></Group>
+                <Group><Text fw={500}>Class:</Text><Text>{profile.class?.name || 'N/A'}</Text></Group>
+                <TextInput label="Phone Number" value={phone} onChange={(e) => setPhone(e.currentTarget.value)} mt="md" readOnly={isGuardian} />
+                {!isGuardian && <Button onClick={handleUpdate} mt="xl">Update Profile</Button>}
             </Paper>
         </>
     );

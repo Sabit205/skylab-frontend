@@ -1,43 +1,47 @@
 import { Outlet } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import useRefreshToken from "../hooks/useRefreshToken";
 import useAuth from "../hooks/useAuth";
-import { Loader, Center } from "@mantine/core";
+import { axiosPrivate } from "../api/axios";
 
 const PersistLogin = () => {
-    // We no longer need a local isLoading state here. We will use the global one.
-    const refresh = useRefreshToken();
-    const { auth, setIsLoading } = useAuth(); // Get setIsLoading from our context
+    const refreshUserToken = useRefreshToken();
+    const { auth, setAuth, setIsLoading } = useAuth();
 
     useEffect(() => {
         let isMounted = true;
 
-        const verifyRefreshToken = async () => {
+        const verifyAuth = async () => {
+            const guardianToken = localStorage.getItem('guardian-token');
+
             try {
-                // Attempt to get a new access token using the refresh token cookie
-                await refresh();
+                // Prioritize Guardian Session
+                if (guardianToken) {
+                    const response = await axiosPrivate.post('/api/guardian/refresh', {}, {
+                        headers: { 'Authorization': `Bearer ${guardianToken}` }
+                    });
+                    const { accessToken, user } = response.data;
+                    localStorage.setItem('guardian-token', accessToken);
+                    if (isMounted) setAuth({ user, accessToken });
+                } else {
+                    // Fallback to regular user session
+                    await refreshUserToken();
+                }
             } catch (err) {
-                console.error("Persistent login failed:", err);
+                console.log("No active session found to persist.");
+                localStorage.removeItem('guardian-token');
             } finally {
-                // CRITICAL: This block runs whether the refresh succeeds or fails.
-                // We set the global loading state to `false` here, signaling that
-                // the session restoration attempt is complete.
                 if (isMounted) {
                     setIsLoading(false);
                 }
             }
         }
 
-        // If we don't have an access token in our state, it means it's a fresh page load.
-        // So, we attempt to verify the refresh token.
-        // If we already have an access token (e.g., from navigating after login), we don't need to refresh.
-        !auth?.accessToken ? verifyRefreshToken() : setIsLoading(false);
+        !auth?.accessToken ? verifyAuth() : setIsLoading(false);
 
         return () => { isMounted = false; }
-    }, [auth.accessToken, refresh, setIsLoading]);
+    }, []);
 
-    // We no longer need to show a loader here, because the ProtectedRoute will handle it.
-    // We just render the child routes.
     return <Outlet />;
 }
 
